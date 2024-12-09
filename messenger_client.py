@@ -138,3 +138,5 @@ def main(): # handles welcome port connection and passes client specific port to
                 msg_to_server = input(prompt_from_server + ": ")
 
         del client
+
+main()
