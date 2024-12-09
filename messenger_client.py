@@ -51,7 +51,7 @@ class MessengerClient:
 
         ''' Obtain any arguments given in the message from the server '''
         num_args = msg.count("$$$") // 2
-        for i in num_args:
+        for i in range(num_args):
             if msg[:3] == "$$$" and msg[6:9] == "$$$":
                 return_args.append(msg[3:6])
                 msg = msg[9:]
@@ -80,7 +80,7 @@ class MessengerClient:
         msg_to_server = self.encapsulate(args, msg)
 
         ''' Send and receive '''
-        self.client_socket.send(msg_to_server.encode())
+        self.client_socket.sendall(msg_to_server.encode())
 
         msg_from_server = (self.client_socket.recv(1024)).decode()
 
@@ -98,20 +98,18 @@ def main(): # handles welcome port connection and passes client specific port to
 
     ''' Connect to welcoming socket '''
     while connection_port == "Unavailable" and connection_attempts < 10:
-        server_ip = sys.argv[1]
-        welcome_port = int(sys.argv[2])
-        server_address = (server_ip, welcome_port)
-        client_socket = socket(AF_INET, SOCK_STREAM)
+        server_ip       = "192.168.56.1"#sys.argv[1]
+        welcome_port    = 50000#int(sys.argv[2])
+        server_address  = (server_ip, welcome_port)
+        client_socket   = socket(AF_INET, SOCK_STREAM)
         client_socket.connect(server_address)
-
-        msg_to_server = "Requesting Port"
-        client_socket.send(msg_to_server.encode())
-
         connection_port = (client_socket.recv(1024)).decode()
+        client_socket.close()
 
         if connection_port == "Unavailable":
             print("Initial connection failed, trying again...")
             connection_attempts += 1
+
 
     if connection_attempts == 10:
         print("Server is currently unavailable")
@@ -119,7 +117,7 @@ def main(): # handles welcome port connection and passes client specific port to
     
     else:
         connection_port = int(connection_port)
-        client = MessengerClient(server_ip, connection_port)
+        client          = MessengerClient(server_ip, connection_port)
 
         args_to_server = []
         msg_to_server  = "Initial Connection"
@@ -144,10 +142,11 @@ def main(): # handles welcome port connection and passes client specific port to
             
             print(msg_from_server)
             
-            if prompt_from_server == "":
-                msg_to_server = input(prompt_from_server)
-            else:
-                msg_to_server = input(prompt_from_server + ": ")
+            if connected:
+                if prompt_from_server == "":
+                    msg_to_server = input(prompt_from_server)
+                else:
+                    msg_to_server = input(prompt_from_server + ": ")
 
         del client
 
