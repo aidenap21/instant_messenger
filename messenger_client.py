@@ -11,13 +11,15 @@ class MessengerClient:
 
 
     def encapsulate(self, args, msg):
-        ''' Prepare message for sending to server '''
-        encapsulated_msg = "<<<" # add header to the message
+        ''' Add header '''
+        encapsulated_msg = "<<<"
         
+        ''' Add arguments '''
         for arg in args:
             encapsulated_msg += "$$$" + arg + "$$$" # wrap argument and add it to the message
 
-        encapsulated_msg += msg + ">>>" # add msg and footer to the message
+        ''' Add message and footer '''
+        encapsulated_msg += msg + ">>>"
 
         return encapsulated_msg
     
@@ -89,65 +91,7 @@ class MessengerClient:
 
 
     def __del__(self):
+        # args = ["EXT"]
+        # msg = ""
+        # self.send_and_receive(args, msg)
         self.client_socket.close()
-
-
-def main(): # handles welcome port connection and passes client specific port to MessengerClient
-    connection_port = "Unavailable"
-    connection_attempts = 0
-
-    ''' Connect to welcoming socket '''
-    while connection_port == "Unavailable" and connection_attempts < 10:
-        server_ip       = "192.168.56.1"#sys.argv[1]
-        welcome_port    = 50000#int(sys.argv[2])
-        server_address  = (server_ip, welcome_port)
-        client_socket   = socket(AF_INET, SOCK_STREAM)
-        client_socket.connect(server_address)
-        connection_port = (client_socket.recv(1024)).decode()
-        client_socket.close()
-
-        if connection_port == "Unavailable":
-            print("Initial connection failed, trying again...")
-            connection_attempts += 1
-
-
-    if connection_attempts == 10:
-        print("Server is currently unavailable")
-        exit()
-    
-    else:
-        connection_port = int(connection_port)
-        client          = MessengerClient(server_ip, connection_port)
-
-        args_to_server = []
-        msg_to_server  = "Initial Connection"
-
-        args_from_server   = []
-        msg_from_server    = ""
-        prompt_from_server = ""
-
-        connected = True
-
-        while connected:
-            args_from_server, msg_from_server, prompt_from_server = client.send_and_receive(args_to_server, msg_to_server)
-
-            for arg in args_from_server:
-                match arg:
-                    case "EXT":
-                        connected = False
-                    case "CLR":
-                        os.system('cls' if os.name == 'nt' else 'clear')
-                    case _:
-                        print("INVALID ARGUMENT FROM SERVER")
-            
-            print(msg_from_server)
-            
-            if connected:
-                if prompt_from_server == "":
-                    msg_to_server = input(prompt_from_server)
-                else:
-                    msg_to_server = input(prompt_from_server + ": ")
-
-        del client
-
-main()
