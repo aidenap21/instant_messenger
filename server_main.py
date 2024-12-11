@@ -29,7 +29,9 @@ while welcoming:
         welcoming = False
         print(f"Child PID: {pid}")
         server = MessengerServer(new_port)
-        server.connect_client()
+        server.connect_to_client()
+        del server
+
     # Parent process runs welcoming socket
     else:
         connectionSocket.sendall(str(new_port).encode())

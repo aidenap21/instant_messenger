@@ -95,10 +95,47 @@ class MessengerClient:
 
         ''' Return decapsulated message '''
         return self.decapsulate(msg_from_server)
+    
+
+    def connect_to_server(self):
+        ''' Sets up initial connetion message elements '''
+        args_to_server = [""]
+        msg_to_server  = "Initial Connection"
+
+        args_from_server   = []
+        msg_from_server    = ""
+        prompt_from_server = ""
+
+        connected = True
+
+        while connected:
+            args_from_server, msg_from_server, prompt_from_server = self.send_and_receive(args_to_server, msg_to_server)
+
+            for arg in args_from_server:
+                match arg:
+                    case "EXT":
+                        connected = False
+                    case "CLR":
+                        os.system('cls' if os.name == 'nt' else 'clear')
+                    case _:
+                        print("INVALID ARGUMENT FROM SERVER")
+            
+            print(msg_from_server)
+            
+            args_to_server = []
+            msg_to_server  = ""
+
+            if connected:
+                if prompt_from_server == "":
+                    msg_to_server = input(prompt_from_server)
+                else:
+                    msg_to_server = input(prompt_from_server + ": ")
+                
+                if msg_to_server == "!exit":
+                    args_to_server.append("EXT")
+                    msg_to_server = ""
 
 
     def __del__(self):
-        # args = ["EXT"]
-        # msg = ""
-        # self.send_and_receive(args, msg)
+        print("CONNECTION ENDED")
         self.client_socket.close()
