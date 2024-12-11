@@ -11,8 +11,8 @@ def main(): # handles welcome port connection and passes client specific port to
 
     ''' Connect to welcoming socket '''
     while connection_port == "Unavailable" and connection_attempts < 10:
-        server_ip       = "192.168.56.1"#sys.argv[1]
-        welcome_port    = 50000#int(sys.argv[2])
+        server_ip       = sys.argv[1]
+        welcome_port    = int(sys.argv[2])
         server_address  = (server_ip, welcome_port)
         client_socket   = socket(AF_INET, SOCK_STREAM)
         client_socket.connect(server_address)
@@ -47,7 +47,9 @@ def main(): # handles welcome port connection and passes client specific port to
             for arg in args_from_server:
                 match arg:
                     case "EXT":
+                        print("Told to exit by the server")
                         connected = False
+                        break # delete later
                     case "CLR":
                         os.system('cls' if os.name == 'nt' else 'clear')
                     case _:
@@ -55,11 +57,18 @@ def main(): # handles welcome port connection and passes client specific port to
             
             print(msg_from_server)
             
+            args_to_server = []
+            msg_to_server  = ""
+
             if connected:
                 if prompt_from_server == "":
                     msg_to_server = input(prompt_from_server)
                 else:
                     msg_to_server = input(prompt_from_server + ": ")
+                
+                if msg_to_server == "!exit":
+                    args_to_server.append("EXT")
+                    msg_to_server = ""
 
         print("CONNECTION ENDED")
         del client

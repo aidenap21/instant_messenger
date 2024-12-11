@@ -13,20 +13,25 @@ serverSocket.bind(('', serverPort))
 serverSocket.listen()
 print(f"The server is ready to receive at IP {gethostbyname(gethostname())} with port: {serverPort}")
 
-parent_pid = os.getpid()
-pid        = parent_pid
+welcoming = True
 
-while pid == parent_pid:
+while welcoming:
     connectionSocket, addr = serverSocket.accept()
     new_port = random.randint(50001, 60000)
-
-    connectionSocket.sendall(str(new_port).encode())
-    connectionSocket.close()
 
     print("Received connection")
 
     pid = os.fork()
-    if pid != parent_pid:
+
+    # Child process runs new client connection
+    if pid == 0:
         serverSocket.close()
+        welcoming = False
         print(f"Child PID: {pid}")
-        # ADD SERVER LOOP HERE
+        server = MessengerServer(new_port)
+        server.connect_client()
+    # Parent process runs welcoming socket
+    else:
+        connectionSocket.sendall(str(new_port).encode())
+
+    connectionSocket.close()

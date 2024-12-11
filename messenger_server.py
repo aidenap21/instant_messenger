@@ -7,7 +7,7 @@ from socket import *
 
 ''' Class that runs for a client's specific server connection '''
 class MessengerServer:
-    def __init__(self, server_ip, server_port):
+    def __init__(self, server_port):
         self.server_socket = socket(AF_INET,SOCK_STREAM)
         self.server_socket.bind(('', server_port))
         self.server_socket.listen()
@@ -19,6 +19,7 @@ class MessengerServer:
         return_args   = []
         return_msg    = ""
         return_prompt = ""
+        connected     = True
 
         ''' Check arguments '''
         for arg in args:
@@ -26,7 +27,7 @@ class MessengerServer:
                 case "EXT":
                     return_args.append("EXT")
                     return_msg = "Exiting..."
-                    # NEED TO KILL SERVER CONNECTION WHEN THIS IS RECEIVED
+                    connected  = False
                 
                 case _:
                     print(f"INVALID ARGUMENT: {arg}")
@@ -36,7 +37,7 @@ class MessengerServer:
         return_msg    = "This is some message"
         return_prompt = "Type something here"
 
-        return return_args, return_msg, return_prompt
+        return return_args, return_msg, return_prompt, connected
 
 
     def encapsulate(self, args, msg, prompt):
@@ -78,12 +79,13 @@ class MessengerServer:
                     attempt +=1
 
                 if attempt == 10:
-                    print("Message from server corrupted, exiting...")
-                    return_msg = "$$$EXIT$$$"
+                    print("Message from client corrupted, exiting...")
+                    return_args.append("EXT")
                     return return_args, return_msg
+                
         else:
-            print("Message from server corrupted, exiting...")
-            return_msg = "$$$EXIT$$$"
+            print("Message from client corrupted, exiting...")
+            return_args.append("EXT")
             return return_args, return_msg
 
         ''' Obtain any arguments given in the message from the server '''
@@ -99,21 +101,19 @@ class MessengerServer:
         ''' Get direct input from the user from the client '''
         return_msg = msg
 
-        ''' Return argument list, message, and prompt from server '''
+        ''' Return argument list and message from client '''
         return return_args, return_msg #, return_prompt
 
 
     def receive_and_send(self):
-        # connected = True      # LOOP NEEDS TO BE IMPLEMENTED SOMEWHERE ELSE
-        # while connected:
         ''' Receive from client '''
-        msg_from_client = (self.client_socket.recv(1024)).decode()
-        # print(msg_from_client.decode())
+        received_msg = (self.client_socket.recv(1024)).decode()
+
         ''' Decapsulate message '''
-        args_from_client, msg_from_client = self.decapsulate(msg_from_client)
+        args_from_client, msg_from_client = self.decapsulate(received_msg)
 
         ''' Perform server actions based on message from client '''
-        args_to_client, msg_to_client, prompt_to_client = self.perform_actions(args_from_client, msg_to_client)
+        args_to_client, msg_to_client, prompt_to_client, connected = self.perform_actions(args_from_client, msg_from_client)
 
         ''' Encapsulate return values '''
         encapsulated_msg = self.encapsulate(args_to_client, msg_to_client, prompt_to_client)
@@ -123,6 +123,14 @@ class MessengerServer:
 
         print(f"Send response of ARGS: [{args_from_client}] and MSG: [{msg_from_client}] to client using PID: {os.getpid()}")
 
+        return connected
+
+
+    def connect_client(self):
+        connected = True
+
+        while connected:
+            connected = self.receive_and_send()
 
     def __del__(self):
         print("CONNECTION ENDED")

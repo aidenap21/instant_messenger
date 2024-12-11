@@ -7,7 +7,13 @@ class MessengerClient:
     def __init__(self, server_ip, server_port):
         server_address = (server_ip, server_port)
         self.client_socket = socket(AF_INET, SOCK_STREAM)
-        self.client_socket.connect(server_address)
+        connected = False
+        while not connected:
+            try:
+                self.client_socket.connect(server_address)
+                connected = True
+            except:
+                print("Failed to initialize, trying again")
 
 
     def encapsulate(self, args, msg):
@@ -44,11 +50,12 @@ class MessengerClient:
 
                 if attempt == 10:
                     print("Message from server corrupted, exiting...")
-                    return_msg = "$$$EXIT$$$"
+                    print(msg)
+                    return_msg = "$$$EXT$$$"
                     return return_args, return_msg, return_prompt
         else:
             print("Message from server corrupted, exiting...")
-            return_msg = "$$$EXIT$$$"
+            return_msg = "$$$EXT$$$"
             return return_args, return_msg, return_prompt
 
         ''' Obtain any arguments given in the message from the server '''
