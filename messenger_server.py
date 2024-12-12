@@ -4,6 +4,7 @@ import datetime
 import time
 import random
 import sqlite3
+from multiprocessing import Value, Manager
 from socket import *
 
 ''' Class that runs for a client's specific server connection '''
@@ -17,9 +18,11 @@ class MessengerServer:
 
         self.user_db     = sqlite3.connect("users.db")
         self.msg_db      = sqlite3.connect("messages.db")
-        self.state       = 0.0
+        self.state       = Value("f", 0.0)
         self.username    = "" # stores users own username
         self.recepient   = "" # stores username user is messaging
+
+        self.communicators = Manager().list(["username", "recepient"]) # stores username and recepient for background process
 
         '''
         SERVER STATES
@@ -44,7 +47,7 @@ class MessengerServer:
         return_msg    = ""
         return_prompt = ""
 
-        match self.state:
+        match self.state.value:
             case -1.0:
                 return_args.append("EXT")
                 return_msg = "Exiting..."
@@ -109,16 +112,14 @@ class MessengerServer:
         return_args    = []
         return_msg     = ""
         return_prompt  = ""
-        connected      = True
         user_db_cursor = self.user_db.cursor()
 
         ''' Check arguments '''
         for arg in args:
             match arg:
                 case "EXT":
-                    self.state = -1.0
+                    self.state.value = -1.0
                     return_args, return_msg, return_prompt = self.get_state_responses()
-                    connected  = False
                     query      = "UPDATE registered_users SET active=FALSE WHERE username=?"
                     user_db_cursor.execute(query, (self.username,))
                     self.user_db.commit()
@@ -127,18 +128,17 @@ class MessengerServer:
                     print(f"INVALID ARGUMENT: {arg}")
         
         if msg == "!exit":
-            self.state = -1.0
+            self.state.value = -1.0
             return_args, return_msg, return_prompt = self.get_state_responses()
-            connected  = False
             query      = "UPDATE registered_users SET active=FALSE WHERE username=?"
             user_db_cursor.execute(query, (self.username,))
             self.user_db.commit()
 
         ''' State related actions '''
-        match self.state:
+        match self.state.value:
             # Initial Connection 
             case 0.0:
-                self.state = 1.0
+                self.state.value = 1.0
                 return_args, return_msg, return_prompt = self.get_state_responses()
             
 
@@ -146,22 +146,22 @@ class MessengerServer:
             case 1.0:
                 # Login chosen
                 if msg.lower() == "l":
-                    self.state = 1.10
+                    self.state.value = 1.10
 
                 # Create new account chosen
                 elif msg.lower() == "c":
-                    self.state = 1.20
+                    self.state.value = 1.20
 
                 return_args, return_msg, return_prompt = self.get_state_responses()
 
-                if self.state == 1.0:
+                if self.state.value == 1.0:
                     return_msg    = "Invalid choice\n" + return_msg
 
 
             # Login chosen, get username
             case 1.10:
                 if msg == "!back":
-                    self.state = 1.0
+                    self.state.value = 1.0
                     return_args, return_msg, return_prompt = self.get_state_responses()
 
                 else:
@@ -171,8 +171,9 @@ class MessengerServer:
 
                     # Username found in database
                     if len(db_fetch) > 0:
-                        self.username = msg
-                        self.state    = 1.11
+                        self.username                          = msg
+                        self.communicators[0]                  = self.username
+                        self.state.value                       = 1.11
                         return_args, return_msg, return_prompt = self.get_state_responses()
                     
                     else:
@@ -182,8 +183,9 @@ class MessengerServer:
             # Login chosen, get password
             case 1.11:
                 if msg == "!back":
-                    self.state    = 1.10
-                    self.username = ""
+                    self.state.value      = 1.10
+                    self.username         = ""
+                    self.communicators[0] = ""
                     return_args, return_msg, return_prompt = self.get_state_responses()
                 
                 else:
@@ -196,7 +198,7 @@ class MessengerServer:
                         query = "UPDATE registered_users SET active=TRUE WHERE username=?"
                         user_db_cursor.execute(query, (self.username,))
                         self.user_db.commit()
-                        self.state = 2.0
+                        self.state.value = 2.0
                         return_args, return_msg, return_prompt = self.get_state_responses()
                     
                     else:
@@ -207,7 +209,7 @@ class MessengerServer:
             # Create new account chosen, get username
             case 1.20:
                 if msg == "!back":
-                    self.state = 1.0
+                    self.state.value = 1.0
                     return_args, return_msg, return_prompt = self.get_state_responses()
 
                 else:
@@ -217,8 +219,9 @@ class MessengerServer:
 
                     # Username not found in database
                     if len(db_fetch) == 0:
-                        self.username = msg
-                        self.state    = 1.21
+                        self.username                          = msg
+                        self.communicators[0]                  = self.username
+                        self.state.value                       = 1.21
                         return_args, return_msg, return_prompt = self.get_state_responses()
                     
                     else:
@@ -228,15 +231,16 @@ class MessengerServer:
             # Create new account chosen, get password
             case 1.21:
                 if msg == "!back":
-                    self.state    = 1.20
-                    self.username = ""
+                    self.state.value      = 1.20
+                    self.username         = ""
+                    self.communicators[0] = ""
                     return_args, return_msg, return_prompt = self.get_state_responses()
                 
                 else:
                     query = "INSERT INTO registered_users VALUES (?, ?, TRUE)"
                     user_db_cursor.execute(query, (self.username, msg))
                     self.user_db.commit()
-                    self.state = 2.0
+                    self.state.value = 2.0
                     return_args, return_msg, return_prompt = self.get_state_responses()
 
             
@@ -254,7 +258,8 @@ class MessengerServer:
                     # Username found in database
                     if len(db_fetch) > 0:
                         self.recepient = msg
-                        self.state     = 3.0
+                        self.communicators[1] = self.recepient
+                        self.state.value     = 3.0
                         return_args, return_msg, return_prompt = self.get_state_responses()
 
                     else:
@@ -265,8 +270,9 @@ class MessengerServer:
             # Messaging screen, send message to chosen user
             case 3.0:
                 if msg == "!back":
-                    self.state     = 2.0
+                    self.state.value     = 2.0
                     self.recepient = ""
+                    self.communicators[1] = ""
 
                 else:
                     msg_db_cursor = self.msg_db.cursor()
@@ -276,7 +282,7 @@ class MessengerServer:
                 return_args, return_msg, return_prompt = self.get_state_responses()
 
 
-        return return_args, return_msg, return_prompt, connected
+        return return_args, return_msg, return_prompt
 
 
     def encapsulate(self, args, msg, prompt):
@@ -352,7 +358,7 @@ class MessengerServer:
         args_from_client, msg_from_client = self.decapsulate(received_msg)
 
         ''' Perform server actions based on message from client '''
-        args_to_client, msg_to_client, prompt_to_client, connected = self.perform_actions(args_from_client, msg_from_client)
+        args_to_client, msg_to_client, prompt_to_client = self.perform_actions(args_from_client, msg_from_client)
 
         ''' Encapsulate return values '''
         encapsulated_msg = self.encapsulate(args_to_client, msg_to_client, prompt_to_client)
@@ -362,18 +368,53 @@ class MessengerServer:
 
         print(f"Send response of ARGS: [{args_from_client}] and MSG: [{msg_from_client}] to client using PID: {os.getpid()}")
 
-        return connected
+
+    def send_for_state(self):
+        ''' Get message data based on current state '''
+        args, msg, prompt = self.get_state_responses()
+
+        ''' Encapsulate return values '''
+        encapsulatead_msg = self.encapsulate(args, msg, prompt)
+
+        ''' Send to client '''
+        self.client_socket.send(encapsulatead_msg.encode())
 
 
     def connect_to_client(self):
-        connected = True
+        user_db_cursor = self.user_db.cursor()
+        msg_db_cursor  = self.msg_db.cursor()
+        previous_fetch = []
 
-        while connected:
-            connected = self.receive_and_send()
+        pid = os.fork()
+
+        while self.state.value >= 0:
+            # Parent listens and responds to client
+            if pid > 0:
+                self.receive_and_send()
+
+            # Child watches for DB changes to update the client
+            else:
+                if self.state.value == 2.0:
+                    user_db_cursor.execute("SELECT * FROM registered_users WHERE active=TRUE")
+                    db_fetch       = user_db_cursor.fetchall()
+
+                    if db_fetch != previous_fetch:
+                        self.send_for_state()
+                        previous_fetch = db_fetch
+
+                elif self.state.value == 3.0:
+                    query = "SELECT * FROM sent_messages WHERE (sender=? AND receiver=?) OR (sender=? AND receiver=?) ORDER BY message_time"
+                    msg_db_cursor.execute(query, (self.communicators[0], self.communicators[1], self.communicators[1], self.communicators[0]))
+                    db_fetch = msg_db_cursor.fetchall()
+
+                    if db_fetch != previous_fetch:
+                        self.send_for_state()
+                        previous_fetch = db_fetch
+
 
     def __del__(self):
         user_db_cursor    = self.user_db.cursor()
-        self.state        = -1.0
+        self.state.value        = -1.0
         args, msg, prompt = self.get_state_responses()
         query             = "UPDATE registered_users SET active=FALSE WHERE username=?"
         user_db_cursor.execute(query, (self.username,))
