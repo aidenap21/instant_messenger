@@ -99,7 +99,6 @@ class MessengerClient:
                         case _:
                             print("INVALID ARGUMENT FROM SERVER")
                 
-                # print(f"LENGTH OF MSG: {len(msg_from_server)}")
                 print(msg_from_server)
                 print(prompt_from_server)
 

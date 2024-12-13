@@ -34,4 +34,6 @@ def main(): # handles welcome port connection and passes client specific port to
         client.connect_to_server()
         del client
 
-main()
+
+if __name__ == "__main__":
+    main()

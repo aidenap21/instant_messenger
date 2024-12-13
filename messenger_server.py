@@ -17,9 +17,9 @@ class MessengerServer:
         print(f"The server is ready to receive at IP {gethostbyname(gethostname())} with port: {server_port}")
         self.client_socket, addr = self.server_socket.accept()
 
-        self.user_db     = sqlite3.connect("users.db")
-        self.msg_db      = sqlite3.connect("messages.db")
-        self.state       = Value("i", 0)
+        self.users_db_path = "users.db" # sqlite3.connect("users.db")
+        self.msg_db_path  = "messages.db" # sqlite3.connect("messages.db")
+        self.state        = Value("i", 0)
 
         self.communicators = Manager().dict() # stores username and recipient for background process
         self.communicators["username"]  = ""
@@ -77,8 +77,8 @@ class MessengerServer:
 
             case 6:
                 with self.lock:
-
-                    user_db_cursor = self.user_db.cursor()
+                    user_db        = sqlite3.connect(self.users_db_path)
+                    user_db_cursor = user_db.cursor()
 
                     return_args.append("CLR")
 
@@ -96,7 +96,8 @@ class MessengerServer:
 
             case 7:
                 with self.lock:
-                    msg_db_cursor = self.msg_db.cursor()
+                    msg_db        = sqlite3.connect(self.msg_db_path)
+                    msg_db_cursor = msg_db.cursor()
 
                     return_args.append("CLR")
                     return_msg = ""
@@ -104,8 +105,6 @@ class MessengerServer:
                     query = "SELECT * FROM sent_messages WHERE (sender=? AND receiver=?) OR (sender=? AND receiver=?) ORDER BY message_time"
                     msg_db_cursor.execute(query, (self.communicators["username"], self.communicators["recipient"], self.communicators["recipient"], self.communicators["username"]))
                     db_fetch = msg_db_cursor.fetchall()
-
-                    # print(f"{len(db_fetch)} MESSAGES FOUND")
 
                     for message in db_fetch:
                         return_msg += f"{message[0]}: {message[3]}\n"
@@ -120,7 +119,8 @@ class MessengerServer:
         return_args    = []
         return_msg     = ""
         return_prompt  = ""
-        user_db_cursor = self.user_db.cursor()
+        user_db        = sqlite3.connect(self.users_db_path)
+        user_db_cursor = user_db.cursor()
 
         ''' Check arguments '''
         for arg in args:
@@ -130,7 +130,7 @@ class MessengerServer:
                     return_args, return_msg, return_prompt = self.get_state_responses()
                     query      = "UPDATE registered_users SET active=FALSE WHERE username=?"
                     user_db_cursor.execute(query, (self.communicators["username"],))
-                    self.user_db.commit()
+                    user_db.commit()
                 
                 case _:
                     print(f"INVALID ARGUMENT: {arg}")
@@ -140,7 +140,7 @@ class MessengerServer:
             return_args, return_msg, return_prompt = self.get_state_responses()
             query      = "UPDATE registered_users SET active=FALSE WHERE username=?"
             user_db_cursor.execute(query, (self.communicators["username"],))
-            self.user_db.commit()
+            user_db.commit()
 
         ''' State related actions '''
         match self.state.value:
@@ -203,7 +203,7 @@ class MessengerServer:
                     if len(db_fetch) > 0:
                         query = "UPDATE registered_users SET active=TRUE WHERE username=?"
                         user_db_cursor.execute(query, (self.communicators["username"],))
-                        self.user_db.commit()
+                        user_db.commit()
                         self.state.value = 6
                         return_args, return_msg, return_prompt = self.get_state_responses()
                     
@@ -243,7 +243,7 @@ class MessengerServer:
                 else:
                     query = "INSERT INTO registered_users VALUES (?, ?, TRUE)"
                     user_db_cursor.execute(query, (self.communicators["username"], msg))
-                    self.user_db.commit()
+                    user_db.commit()
                     self.state.value = 6
                     return_args, return_msg, return_prompt = self.get_state_responses()
 
@@ -277,10 +277,11 @@ class MessengerServer:
                     self.communicators["recipient"] = ""
 
                 else:
-                    msg_db_cursor = self.msg_db.cursor()
+                    msg_db        = sqlite3.connect(self.msg_db_path)
+                    msg_db_cursor = msg_db.cursor()
                     query         = "INSERT INTO sent_messages VALUES (?, ?, DATETIME('now'), ?)"
                     msg_db_cursor.execute(query, (self.communicators["username"], self.communicators["recipient"], msg))
-                    self.msg_db.commit()
+                    msg_db.commit()
                 return_args, return_msg, return_prompt = self.get_state_responses()
 
 
@@ -333,7 +334,6 @@ class MessengerServer:
 
 
     def receive_and_send(self):
-        print(f"Current State before receiving: {self.state.value}")
         ''' Receive from client '''
         received_msg = (self.client_socket.recv(1024)).decode()
 
@@ -349,7 +349,7 @@ class MessengerServer:
         ''' Send to client '''
         self.client_socket.send(encapsulated_msg.encode())
 
-        print(f"Send response of ARGS: [{args_from_client}] and MSG: [{msg_from_client}] to client using PID: {os.getpid()}")
+        print(f"Send response of ARGS: [{args_from_client}] and MSG: [{msg_from_client}] to {self.communicators['username']} using PID: {os.getpid()}")
 
 
     def send_for_state(self):
@@ -368,7 +368,9 @@ class MessengerServer:
         return True
 
 
-    def background_update(self, user_db, msg_db):
+    def background_update(self):
+        user_db        = sqlite3.connect(self.users_db_path)
+        msg_db         = sqlite3.connect(self.msg_db_path)
         user_db_cursor = user_db.cursor()
         msg_db_cursor  = msg_db.cursor()
         previous_fetch = []
@@ -380,7 +382,6 @@ class MessengerServer:
                 db_fetch       = user_db_cursor.fetchall()
 
                 if db_fetch != previous_fetch:
-                    print("Child sending update")
                     if self.send_for_state():
                         # Update if message was formed and sent
                         previous_fetch = db_fetch
@@ -391,14 +392,13 @@ class MessengerServer:
                 db_fetch = msg_db_cursor.fetchall()
 
                 if db_fetch != previous_fetch:
-                    print(f"Child sending update {self.communicators}")
                     if self.send_for_state():
                         # Update if message was formed and sent
                         previous_fetch = db_fetch
 
 
     def connect_to_client(self):
-        process = Process(target = self.background_update, args = (self.user_db, self.msg_db))
+        process = Process(target = self.background_update)
         process.start()
 
         while self.state.value >= 0:
@@ -408,13 +408,9 @@ class MessengerServer:
 
 
     def __del__(self):
-        user_db_cursor    = self.user_db.cursor()
-        self.state.value        = -1
+        self.state.value  = -1
         args, msg, prompt = self.get_state_responses()
-        query             = "UPDATE registered_users SET active=FALSE WHERE username=?"
-        user_db_cursor.execute(query, (self.communicators["username"],))
-        self.user_db.commit()
-        encapsulated_msg = self.encapsulate(args, msg, prompt)
+        encapsulated_msg  = self.encapsulate(args, msg, prompt)
         self.client_socket.send(encapsulated_msg.encode())
         print("CONNECTION ENDED")
         self.server_socket.close()

@@ -19,6 +19,7 @@ def main():
     serverSocket = socket(AF_INET, SOCK_STREAM)
     serverSocket.bind(('', serverPort))
     serverSocket.listen()
+    serverSocket.settimeout(1.0)
     print(f"The server is ready to receive at IP {gethostbyname(gethostname())} with port: {serverPort}")
 
     welcoming = True
@@ -34,7 +35,12 @@ def main():
 
     try:
         while welcoming:
-            connectionSocket, addr = serverSocket.accept()
+            try:
+                connectionSocket, addr = serverSocket.accept()
+
+            # Times out periodically to handle KeyboardInterrupt
+            except TimeoutError:
+                continue
 
             valid_port = False
             while not valid_port:
