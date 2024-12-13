@@ -5,7 +5,7 @@ import datetime
 import time
 import random
 import sqlite3
-from multiprocessing import Value, Manager, Lock
+from multiprocessing import Process, Value, Manager, Lock
 from socket import *
 
 ''' Class that runs for a client's specific server connection '''
@@ -368,46 +368,43 @@ class MessengerServer:
         return True
 
 
-    def connect_to_client(self):
-        user_db_cursor = self.user_db.cursor()
-        msg_db_cursor  = self.msg_db.cursor()
+    def background_update(self, user_db, msg_db):
+        user_db_cursor = user_db.cursor()
+        msg_db_cursor  = msg_db.cursor()
         previous_fetch = []
 
-        pid = os.fork()
+        # Child watches for DB changes to update the client
+        while self.state.value >= 0:
+            if self.state.value == 6:
+                user_db_cursor.execute("SELECT * FROM registered_users WHERE active=TRUE")
+                db_fetch       = user_db_cursor.fetchall()
+
+                if db_fetch != previous_fetch:
+                    print("Child sending update")
+                    if self.send_for_state():
+                        # Update if message was formed and sent
+                        previous_fetch = db_fetch
+
+            elif self.state.value == 7:
+                query = "SELECT * FROM sent_messages WHERE (sender=? AND receiver=?) OR (sender=? AND receiver=?) ORDER BY message_time"
+                msg_db_cursor.execute(query, (self.communicators["username"], self.communicators["recipient"], self.communicators["recipient"], self.communicators["username"]))
+                db_fetch = msg_db_cursor.fetchall()
+
+                if db_fetch != previous_fetch:
+                    print(f"Child sending update {self.communicators}")
+                    if self.send_for_state():
+                        # Update if message was formed and sent
+                        previous_fetch = db_fetch
+
+
+    def connect_to_client(self):
+        process = Process(target = self.background_update, args = (self.user_db, self.msg_db))
+        process.start()
 
         while self.state.value >= 0:
-            # Parent listens and responds to client
-            if pid > 0:
-                self.receive_and_send()
+            self.receive_and_send()
 
-            # Child watches for DB changes to update the client
-            else:
-                if self.state.value == 6:
-                    user_db_cursor.execute("SELECT * FROM registered_users WHERE active=TRUE")
-                    db_fetch       = user_db_cursor.fetchall()
-
-                    if db_fetch != previous_fetch:
-                        print("Child sending update")
-                        if self.send_for_state():
-                            # Update if message was formed and sent
-                            previous_fetch = db_fetch
-
-                elif self.state.value == 7:
-                    query = "SELECT * FROM sent_messages WHERE (sender=? AND receiver=?) OR (sender=? AND receiver=?) ORDER BY message_time"
-                    msg_db_cursor.execute(query, (self.communicators["username"], self.communicators["recipient"], self.communicators["recipient"], self.communicators["username"]))
-                    db_fetch = msg_db_cursor.fetchall()
-
-                    if db_fetch != previous_fetch:
-                        print(f"Child sending update {self.communicators}")
-                        if self.send_for_state():
-                            # Update if message was formed and sent
-                            previous_fetch = db_fetch
-
-        if pid > 0:
-            os.waitpid(pid, 0)
-
-        else:
-            os._exit(0)
+        process.join()
 
 
     def __del__(self):

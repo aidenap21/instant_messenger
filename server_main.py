@@ -6,6 +6,12 @@ import random
 import sqlite3
 from socket import *
 from messenger_server import MessengerServer
+from multiprocessing import Process
+
+def new_connection(port):
+    server = MessengerServer(port)
+    server.connect_to_client()
+    del server
 
 def main():
     ''' Welcoming Socket '''
@@ -23,7 +29,9 @@ def main():
     user_db_cursor = user_db.cursor()
     user_db_cursor.execute("UPDATE registered_users SET active=FALSE")
     user_db.commit()
-    
+
+    processes = []
+
     try:
         while welcoming:
             connectionSocket, addr = serverSocket.accept()
@@ -37,21 +45,10 @@ def main():
 
             print("Received connection")
 
-            pid = os.fork()
-
-            # Child process runs new client connection
-            if pid == 0:
-                serverSocket.close()
-                welcoming = False
-                print(f"Child PID: {pid}")
-                server = MessengerServer(new_port)
-                server.connect_to_client()
-                del server
-
-            # Parent process runs welcoming socket
-            else:
-                connectionSocket.sendall(str(new_port).encode())
-
+            processes.append(Process(target = new_connection, args = (new_port,)))
+            processes[-1].start()
+            
+            connectionSocket.sendall(str(new_port).encode())
             connectionSocket.close()
 
     except KeyboardInterrupt:
@@ -59,6 +56,9 @@ def main():
 
         user_db_cursor.execute("UPDATE registered_users SET active=FALSE")
         user_db.commit()
+
+        for process in processes:
+            process.join()
 
         print("Server shutting down...")
 
