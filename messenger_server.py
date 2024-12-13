@@ -416,5 +416,6 @@ class MessengerServer:
             print("CONNECTION ENDED")
             self.server_socket.close()
             self.client_socket.close()
+            
         except:
-            print("CHILD ENDING")
+            print("CHILD PROCESS ENDED")

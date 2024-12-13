@@ -2,8 +2,11 @@ import os
 import re
 import sys
 import datetime
+import time
+import tkinter
+from client_gui import ClientGui
 from socket import *
-from multiprocessing import Process, Value, Manager
+from multiprocessing import Process, Value, Manager, Queue
 
 class MessengerClient:
     def __init__(self, server_ip, server_port):
@@ -72,13 +75,16 @@ class MessengerClient:
         return self.decapsulate(msg_from_server)
     
 
-    def background_receiver(self, connected):
+    def background_receiver(self, connected, input_queue):
         server_output      = ""
         args_from_server   = []
         msg_from_server    = ""
-        prompt_from_server = "" # Manager().list([""])
+        prompt_from_server = ""
 
         msg_pattern = r"<<<(.*?)>>>"
+
+        root    = tkinter.Tk()
+        display = ClientGui(root, input_queue)
 
         while connected.value:
             ''' Receive from server '''
@@ -98,9 +104,12 @@ class MessengerClient:
                             os.system('cls' if os.name == 'nt' else 'clear')
                         case _:
                             print("INVALID ARGUMENT FROM SERVER")
-                
+   
                 print(msg_from_server)
                 print(prompt_from_server)
+                display.update_window(msg_from_server)
+                root.update()
+                time.sleep(0.01)
 
 
     def connect_to_server(self):
@@ -110,7 +119,9 @@ class MessengerClient:
 
         connected = Value("b", True)
 
-        process = Process(target = self.background_receiver, args = (connected, ))
+        input_queue = Queue()
+
+        process = Process(target = self.background_receiver, args = (connected, input_queue))
         process.start()
 
         while connected.value:
@@ -125,9 +136,11 @@ class MessengerClient:
                 #     msg_to_server = input()
                 # else:
                 #     msg_to_server = input(prompt_from_server[0] + ": ")
-                while msg_to_server == "":
-                    msg_to_server = input()
+
+                # while msg_to_server == "":
+                #     msg_to_server = input()
                 
+                msg_to_server = input_queue.get()
                 if "!exit" in msg_to_server:
                     args_to_server.append("EXT")
                     msg_to_server = ""
