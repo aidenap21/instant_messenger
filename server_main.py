@@ -15,25 +15,30 @@ print(f"The server is ready to receive at IP {gethostbyname(gethostname())} with
 
 welcoming = True
 
-while welcoming:
-    connectionSocket, addr = serverSocket.accept()
-    new_port = random.randint(50001, 60000)
+try:
+    while welcoming:
+        connectionSocket, addr = serverSocket.accept()
+        new_port = random.randint(50001, 60000)
 
-    print("Received connection")
+        print("Received connection")
 
-    pid = os.fork()
+        pid = os.fork()
 
-    # Child process runs new client connection
-    if pid == 0:
-        serverSocket.close()
-        welcoming = False
-        print(f"Child PID: {pid}")
-        server = MessengerServer(new_port)
-        server.connect_to_client()
-        del server
+        # Child process runs new client connection
+        if pid == 0:
+            serverSocket.close()
+            welcoming = False
+            print(f"Child PID: {pid}")
+            server = MessengerServer(new_port)
+            server.connect_to_client()
+            del server
 
-    # Parent process runs welcoming socket
-    else:
-        connectionSocket.sendall(str(new_port).encode())
+        # Parent process runs welcoming socket
+        else:
+            connectionSocket.sendall(str(new_port).encode())
 
-    connectionSocket.close()
+        connectionSocket.close()
+        
+except KeyboardInterrupt:
+    serverSocket.close()
+    print("Server shutting down...")

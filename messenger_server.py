@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import datetime
 import time
@@ -18,7 +19,7 @@ class MessengerServer:
 
         self.user_db     = sqlite3.connect("users.db")
         self.msg_db      = sqlite3.connect("messages.db")
-        self.state       = Value("f", 0.0)
+        self.state       = Value("i", 0)
         self.username    = "" # stores users own username
         self.recepient   = "" # stores username user is messaging
 
@@ -26,20 +27,20 @@ class MessengerServer:
 
         '''
         SERVER STATES
-        -1.0 = Exit State
+        -1 = Exit State
 
-        0.0  = Initial State
+        0  = Initial State
 
-        1.0  = Login or Create New Account
-        1.10 = Login, enter username
-        1.11 = Login, enter password
+        1  = Login or Create New Account
+        2 = Login, enter username
+        3 = Login, enter password
 
-        1.20 = Create New, enter username
-        1.21 = Create New, enter password
+        4 = Create New, enter username
+        5 = Create New, enter password
 
-        2.0  = Menu Screen, enter user to message
+        6  = Menu Screen, enter user to message
 
-        3.0  = Messaging Screen, enter message to send to user
+        7  = Messaging Screen, enter message to send to user
         '''
 
     def get_state_responses(self):
@@ -48,31 +49,31 @@ class MessengerServer:
         return_prompt = ""
 
         match self.state.value:
-            case -1.0:
+            case -1:
                 return_args.append("EXT")
                 return_msg = "Exiting..."
 
-            case 1.0:
+            case 1:
                 return_args.append("CLR")
                 return_msg    = "Login [L] or Create New Account? [C]"
                 return_prompt = "CHOICE"
 
-            case 1.10:
+            case 2:
                 return_msg    = "Enter username or return [!back]"
                 return_prompt = "USERNAME"
 
-            case 1.11:
+            case 3:
                 return_msg    = "Enter password or return [!back]"
                 return_prompt = "PASSWORD"
-            case 1.20:
+            case 4:
                 return_msg    = "Enter username or return [!back]"
                 return_prompt = "USERNAME"
 
-            case 1.21:
+            case 5:
                 return_msg    = "Enter password or return [!back]"
                 return_prompt = "PASSWORD"
 
-            case 2.0:
+            case 6:
                 user_db_cursor = self.user_db.cursor()
 
                 return_args.append("CLR")
@@ -89,7 +90,7 @@ class MessengerServer:
 
                 return_prompt = "USER TO MESSAGE"
 
-            case 3.0:
+            case 7:
                 msg_db_cursor = self.msg_db.cursor()
 
                 return_args.append("CLR")
@@ -118,7 +119,7 @@ class MessengerServer:
         for arg in args:
             match arg:
                 case "EXT":
-                    self.state.value = -1.0
+                    self.state.value = -1
                     return_args, return_msg, return_prompt = self.get_state_responses()
                     query      = "UPDATE registered_users SET active=FALSE WHERE username=?"
                     user_db_cursor.execute(query, (self.username,))
@@ -128,7 +129,7 @@ class MessengerServer:
                     print(f"INVALID ARGUMENT: {arg}")
         
         if msg == "!exit":
-            self.state.value = -1.0
+            self.state.value = -1
             return_args, return_msg, return_prompt = self.get_state_responses()
             query      = "UPDATE registered_users SET active=FALSE WHERE username=?"
             user_db_cursor.execute(query, (self.username,))
@@ -138,34 +139,34 @@ class MessengerServer:
         match self.state.value:
             # Initial Connection 
             case 0.0:
-                self.state.value = 1.0
+                self.state.value = 1
                 return_args, return_msg, return_prompt = self.get_state_responses()
             
 
             # Login or Create New Account
-            case 1.0:
+            case 1:
                 # Login chosen
                 if msg.lower() == "l":
-                    self.state.value = 1.10
+                    self.state.value = 2
 
                 # Create new account chosen
                 elif msg.lower() == "c":
-                    self.state.value = 1.20
+                    self.state.value = 4
 
                 return_args, return_msg, return_prompt = self.get_state_responses()
 
-                if self.state.value == 1.0:
+                if self.state.value == 1:
                     return_msg    = "Invalid choice\n" + return_msg
 
 
             # Login chosen, get username
-            case 1.10:
+            case 2:
                 if msg == "!back":
-                    self.state.value = 1.0
+                    self.state.value = 1
                     return_args, return_msg, return_prompt = self.get_state_responses()
 
                 else:
-                    query    = "SELECT * FROM registered_users WHERE username=?"
+                    query    = "SELECT * FROM registered_users WHERE username=? AND active=FALSE"
                     user_db_cursor.execute(query, (msg,))
                     db_fetch = user_db_cursor.fetchall()
 
@@ -173,17 +174,17 @@ class MessengerServer:
                     if len(db_fetch) > 0:
                         self.username                          = msg
                         self.communicators[0]                  = self.username
-                        self.state.value                       = 1.11
+                        self.state.value                       = 3
                         return_args, return_msg, return_prompt = self.get_state_responses()
                     
                     else:
                         return_args, return_msg, return_prompt = self.get_state_responses()
-                        return_msg = "Username does not exist\n" + return_msg
+                        return_msg = "Username does not exist or is already logged in\n" + return_msg
 
             # Login chosen, get password
-            case 1.11:
+            case 3:
                 if msg == "!back":
-                    self.state.value      = 1.10
+                    self.state.value      = 2
                     self.username         = ""
                     self.communicators[0] = ""
                     return_args, return_msg, return_prompt = self.get_state_responses()
@@ -198,7 +199,7 @@ class MessengerServer:
                         query = "UPDATE registered_users SET active=TRUE WHERE username=?"
                         user_db_cursor.execute(query, (self.username,))
                         self.user_db.commit()
-                        self.state.value = 2.0
+                        self.state.value = 6
                         return_args, return_msg, return_prompt = self.get_state_responses()
                     
                     else:
@@ -207,9 +208,9 @@ class MessengerServer:
 
 
             # Create new account chosen, get username
-            case 1.20:
+            case 4:
                 if msg == "!back":
-                    self.state.value = 1.0
+                    self.state.value = 1
                     return_args, return_msg, return_prompt = self.get_state_responses()
 
                 else:
@@ -221,7 +222,7 @@ class MessengerServer:
                     if len(db_fetch) == 0:
                         self.username                          = msg
                         self.communicators[0]                  = self.username
-                        self.state.value                       = 1.21
+                        self.state.value                       = 5
                         return_args, return_msg, return_prompt = self.get_state_responses()
                     
                     else:
@@ -229,9 +230,9 @@ class MessengerServer:
                         return_msg = "Username already exists\n" + return_msg
 
             # Create new account chosen, get password
-            case 1.21:
+            case 5:
                 if msg == "!back":
-                    self.state.value      = 1.20
+                    self.state.value      = 4
                     self.username         = ""
                     self.communicators[0] = ""
                     return_args, return_msg, return_prompt = self.get_state_responses()
@@ -240,12 +241,12 @@ class MessengerServer:
                     query = "INSERT INTO registered_users VALUES (?, ?, TRUE)"
                     user_db_cursor.execute(query, (self.username, msg))
                     self.user_db.commit()
-                    self.state.value = 2.0
+                    self.state.value = 6
                     return_args, return_msg, return_prompt = self.get_state_responses()
 
             
             # Menu screen, get user to message
-            case 2.0:
+            case 6:
                 if msg == self.username:
                     return_args, return_msg, return_prompt = self.get_state_responses()
                     return_msg += "You cannot message yourself\n"
@@ -259,7 +260,7 @@ class MessengerServer:
                     if len(db_fetch) > 0:
                         self.recepient = msg
                         self.communicators[1] = self.recepient
-                        self.state.value     = 3.0
+                        self.state.value     = 7
                         return_args, return_msg, return_prompt = self.get_state_responses()
 
                     else:
@@ -268,9 +269,9 @@ class MessengerServer:
 
 
             # Messaging screen, send message to chosen user
-            case 3.0:
+            case 7:
                 if msg == "!back":
-                    self.state.value     = 2.0
+                    self.state.value     = 6
                     self.recepient = ""
                     self.communicators[1] = ""
 
@@ -307,50 +308,31 @@ class MessengerServer:
     
 
     def decapsulate(self, msg):
-        return_args   = [] # such as clearing the terminal
-        return_msg    = "" # message to print
+        return_args = [] # such as clearing the terminal
+        return_msg  = "" # message to print
 
         ''' Ensure entire message from the server is received '''
-        if msg[:3] == "<<<":
-            msg_complete = False
-            attempt = 0
-            while not(msg_complete):
-                if msg[-3:] == ">>>":
-                    msg = msg[3:-3] # remove header and footer
-                    msg_complete = True
-
-                else: # end of message not fully received
-                    msg += (self.client_socket.recv(1024)).decode()
-                    attempt +=1
-
-                if attempt == 10:
-                    print("Message from client corrupted, exiting...")
-                    return_args.append("EXT")
-                    return return_args, return_msg
-                
-        else:
-            print("Message from client corrupted, exiting...")
+        msg_pattern       = r"<<<(.*?)>>>"
+        complete_messages = re.findall(msg_pattern, msg, re.DOTALL)
+        
+        if len(complete_messages) == 0:
             return_args.append("EXT")
-            return return_args, return_msg
+            return_msg = "Message from user corrupted, exiting..."
 
-        ''' Obtain any arguments given in the message from the server '''
-        num_args = msg.count("$$$") // 2
-        for i in range(num_args):
-            if msg[:3] == "$$$" and msg[6:9] == "$$$":
-                return_args.append(msg[3:6])
-                msg = msg[9:]
+        else:
+            return_msg = complete_messages[0]
 
-            else: # argument format invalid, '$$$' likely part of message
-                break
-
-        ''' Get direct input from the user from the client '''
-        return_msg = msg
+            ''' Obtain any arguments given in the message from the server '''
+            arg_pattern = r"\$\$\$(.*?)\$\$\$"
+            return_args = re.findall(arg_pattern, return_msg, re.DOTALL)
+            return_msg  = re.sub(arg_pattern, '', return_msg, flags=re.DOTALL)
 
         ''' Return argument list and message from client '''
         return return_args, return_msg #, return_prompt
 
 
     def receive_and_send(self):
+        print(f"Current State before receiving: {self.state.value}")
         ''' Receive from client '''
         received_msg = (self.client_socket.recv(1024)).decode()
 
@@ -394,27 +376,33 @@ class MessengerServer:
 
             # Child watches for DB changes to update the client
             else:
-                if self.state.value == 2.0:
+                if self.state.value == 6:
                     user_db_cursor.execute("SELECT * FROM registered_users WHERE active=TRUE")
                     db_fetch       = user_db_cursor.fetchall()
 
                     if db_fetch != previous_fetch:
-                        self.send_for_state()
+                        # self.send_for_state()
                         previous_fetch = db_fetch
 
-                elif self.state.value == 3.0:
+                elif self.state.value == 7:
                     query = "SELECT * FROM sent_messages WHERE (sender=? AND receiver=?) OR (sender=? AND receiver=?) ORDER BY message_time"
                     msg_db_cursor.execute(query, (self.communicators[0], self.communicators[1], self.communicators[1], self.communicators[0]))
                     db_fetch = msg_db_cursor.fetchall()
 
                     if db_fetch != previous_fetch:
-                        self.send_for_state()
+                        # self.send_for_state()
                         previous_fetch = db_fetch
+
+        if pid > 0:
+            os.waitpid(pid, 0)
+
+        else:
+            os._exit(0)
 
 
     def __del__(self):
         user_db_cursor    = self.user_db.cursor()
-        self.state.value        = -1.0
+        self.state.value        = -1
         args, msg, prompt = self.get_state_responses()
         query             = "UPDATE registered_users SET active=FALSE WHERE username=?"
         user_db_cursor.execute(query, (self.username,))
