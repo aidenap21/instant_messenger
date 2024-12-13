@@ -101,7 +101,8 @@ class MessengerClient:
                     #     msg_to_server = input()
                     # else:
                     #     msg_to_server = input(prompt_from_server[0] + ": ")
-                    msg_to_server = input()
+                    while msg_to_server == "":
+                        msg_to_server = input()
                     
                     if msg_to_server == "!exit":
                         args_to_server.append("EXT")
