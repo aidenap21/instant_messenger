@@ -408,10 +408,14 @@ class MessengerServer:
 
 
     def __del__(self):
-        self.state.value  = -1
-        args, msg, prompt = self.get_state_responses()
-        encapsulated_msg  = self.encapsulate(args, msg, prompt)
-        self.client_socket.send(encapsulated_msg.encode())
-        print("CONNECTION ENDED")
-        self.server_socket.close()
-        self.client_socket.close()
+        try:
+            self.state.value  = -1
+            args, msg, prompt = self.get_state_responses()
+            encapsulated_msg  = self.encapsulate(args, msg, prompt)
+            self.client_socket.send(encapsulated_msg.encode())
+            print("CONNECTION ENDED")
+            self.server_socket.close()
+            self.client_socket.close()
+            
+        except:
+            print("CHILD PROCESS ENDED")
