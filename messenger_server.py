@@ -381,7 +381,8 @@ class MessengerServer:
                     db_fetch       = user_db_cursor.fetchall()
 
                     if db_fetch != previous_fetch:
-                        # self.send_for_state()
+                        print("Child sending update")
+                        self.send_for_state()
                         previous_fetch = db_fetch
 
                 elif self.state.value == 7:
@@ -390,7 +391,8 @@ class MessengerServer:
                     db_fetch = msg_db_cursor.fetchall()
 
                     if db_fetch != previous_fetch:
-                        # self.send_for_state()
+                        print(f"Child sending update {self.communicators}")
+                        self.send_for_state()
                         previous_fetch = db_fetch
 
         if pid > 0:

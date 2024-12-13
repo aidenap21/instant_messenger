@@ -3,6 +3,7 @@ import re
 import sys
 import datetime
 from socket import *
+from multiprocessing import Value, Manager
 
 class MessengerClient:
     def __init__(self, server_ip, server_port):
@@ -79,48 +80,62 @@ class MessengerClient:
         server_output      = ""
         args_from_server   = []
         msg_from_server    = ""
-        prompt_from_server = ""
+        prompt_from_server = Manager().list([""])
 
         msg_pattern = r"<<<(.*?)>>>"
 
-        connected = True
+        connected = Value("b", True)
 
-        while connected:
+        pid = os.fork()
 
-            self.send(args_to_server, msg_to_server)
+        while connected.value:
+            if pid > 0:
+                client_ended = False
+                self.send(args_to_server, msg_to_server)
 
-            ''' Receive from server '''
-            server_output    += (self.client_socket.recv(1024)).decode()
+                args_to_server = []
+                msg_to_server  = ""
 
-            complete_messages = re.findall(msg_pattern, server_output, re.DOTALL)
-            server_output     = re.sub(msg_pattern, "", server_output, flags=re.DOTALL)
-
-            for msg in complete_messages:
-                args_from_server, msg_from_server, prompt_from_server = self.decapsulate(msg)
-
-                for arg in args_from_server:
-                    match arg:
-                        case "EXT":
-                            connected = False
-                        case "CLR":
-                            os.system('cls' if os.name == 'nt' else 'clear')
-                        case _:
-                            print("INVALID ARGUMENT FROM SERVER")
-                
-                print(msg_from_server)
+                if connected.value and not client_ended:
+                    # if prompt_from_server[0] == "":
+                    #     msg_to_server = input()
+                    # else:
+                    #     msg_to_server = input(prompt_from_server[0] + ": ")
+                    msg_to_server = input()
+                    
+                    if msg_to_server == "!exit":
+                        args_to_server.append("EXT")
+                        msg_to_server = ""
+                        client_ended  = True
             
-            args_to_server = []
-            msg_to_server  = ""
+            else:
+                ''' Receive from server '''
+                server_output    += (self.client_socket.recv(1024)).decode()
 
-            if connected:
-                if prompt_from_server == "":
-                    msg_to_server = input(prompt_from_server)
-                else:
-                    msg_to_server = input(prompt_from_server + ": ")
-                
-                if msg_to_server == "!exit":
-                    args_to_server.append("EXT")
-                    msg_to_server = ""
+                complete_messages = re.findall(msg_pattern, server_output, re.DOTALL)
+                server_output     = re.sub(msg_pattern, "", server_output, flags=re.DOTALL)
+
+                for msg in complete_messages:
+                    args_from_server, msg_from_server, prompt_from_server[0] = self.decapsulate(msg)
+
+                    for arg in args_from_server:
+                        match arg:
+                            case "EXT":
+                                connected.value = False
+                            case "CLR":
+                                os.system('cls' if os.name == 'nt' else 'clear')
+                            case _:
+                                print("INVALID ARGUMENT FROM SERVER")
+                    
+                    # print(f"LENGTH OF MSG: {len(msg_from_server)}")
+                    print(msg_from_server)
+                    print(prompt_from_server[0])
+
+        if pid > 0:
+            os.waitpid(pid, 0)
+
+        else:
+            os._exit(0)
 
 
     def __del__(self):
