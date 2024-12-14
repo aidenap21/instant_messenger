@@ -8,6 +8,17 @@ from socket import *
 from messenger_server import MessengerServer
 from multiprocessing import Process
 
+def get_local_ip():
+    try:
+        # Use a UDP socket to connect to a public server
+        with socket(AF_INET, SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))  # Google's public DNS server
+            local_ip = s.getsockname()[0]  # Get the IP address of the local interface
+        return local_ip
+    except Exception as e:
+        print(f"Error: Unable to determine local IP: {e}")
+        return None
+
 def new_connection(port):
     server = MessengerServer(port)
     server.connect_to_client()
@@ -17,10 +28,10 @@ def main():
     ''' Welcoming Socket '''
     serverPort   = int(50000)
     serverSocket = socket(AF_INET, SOCK_STREAM)
-    serverSocket.bind(('', serverPort))
+    serverSocket.bind(('0.0.0.0', serverPort))
     serverSocket.listen()
     serverSocket.settimeout(1.0)
-    print(f"The server is ready to receive at IP {gethostbyname(gethostname())} with port: {serverPort}")
+    print(f"The server is ready to receive at IP {get_local_ip()} with port: {serverPort}")
 
     welcoming = True
 
