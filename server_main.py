@@ -9,23 +9,24 @@ from messenger_server import MessengerServer
 from multiprocessing import Process
 
 def get_local_ip():
-    try:
-        # Use a UDP socket to connect to a public server
-        with socket(AF_INET, SOCK_DGRAM) as s:
-            s.connect(("8.8.8.8", 80))  # Google's public DNS server
-            local_ip = s.getsockname()[0]  # Get the IP address of the local interface
-        return local_ip
-    except Exception as e:
-        print(f"Error: Unable to determine local IP: {e}")
-        return None
+    ''' Try to connect to public server '''
+    serverSocket = socket(AF_INET, SOCK_DGRAM)
+    serverSocket.connect(("8.8.8.8", 80))
+
+    ''' Get local IP from connection '''
+    local_ip = serverSocket.getsockname()[0]
+    return local_ip
+
 
 def new_connection(port):
+    ''' Handle client interaction '''
     server = MessengerServer(port)
     server.connect_to_client()
     del server
 
+
 def main():
-    ''' Welcoming Socket '''
+    ''' Create welcoming socket '''
     serverPort   = int(50000)
     serverSocket = socket(AF_INET, SOCK_STREAM)
     serverSocket.bind(('0.0.0.0', serverPort))
@@ -33,26 +34,30 @@ def main():
     serverSocket.settimeout(1.0)
     print(f"The server is ready to receive at IP {get_local_ip()} with port: {serverPort}")
 
-    welcoming = True
-
+    ''' List of port numbers already used '''
     active_ports = []
 
+    ''' Reset all user's connection status '''
     user_db        = sqlite3.connect("users.db")
     user_db_cursor = user_db.cursor()
     user_db_cursor.execute("UPDATE registered_users SET active=FALSE")
     user_db.commit()
 
+    ''' List of client-specific server processes '''
     processes = []
 
+    ''' Start welcoming loop '''
     try:
-        while welcoming:
+        while True:
             try:
+                ''' Accept new connection to welcoming socket '''
                 connectionSocket, addr = serverSocket.accept()
 
-            # Times out periodically to handle KeyboardInterrupt
             except TimeoutError:
+                ''' Times out periodically to handle KeyboardInterrupt '''
                 continue
 
+            ''' Gets a new port for the client to connect to '''
             valid_port = False
             while not valid_port:
                 new_port = random.randint(50001, 60000)
@@ -62,18 +67,23 @@ def main():
 
             print("Received connection")
 
+            ''' Start new client-specific process '''
             processes.append(Process(target = new_connection, args = (new_port,)))
             processes[-1].start()
             
+            ''' Send port number to the new connection '''
             connectionSocket.sendall(str(new_port).encode())
             connectionSocket.close()
 
     except KeyboardInterrupt:
+        ''' Close welcoming socket '''
         serverSocket.close()
 
+        ''' Log out users '''
         user_db_cursor.execute("UPDATE registered_users SET active=FALSE")
         user_db.commit()
 
+        ''' Catch all client-specific connections '''
         for process in processes:
             process.join()
 

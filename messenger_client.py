@@ -10,13 +10,17 @@ from multiprocessing import Process, Value, Manager, Queue
 
 class MessengerClient:
     def __init__(self, server_ip, server_port):
-        server_address = (server_ip, server_port)
+        ''' Set up client socket to connect to server '''
+        server_address     = (server_ip, server_port)
         self.client_socket = socket(AF_INET, SOCK_STREAM)
-        connected = False
+        connected          = False
+
+        ''' Continue trying to connect to client's socket '''
         while not connected:
             try:
                 self.client_socket.connect(server_address)
                 connected = True
+                
             except:
                 print("Failed to initialize, trying again")
 
@@ -27,7 +31,7 @@ class MessengerClient:
         
         ''' Add arguments '''
         for arg in args:
-            encapsulated_msg += "$$$" + arg + "$$$" # wrap argument and add it to the message
+            encapsulated_msg += "$$$" + arg + "$$$"
 
         ''' Add message and footer '''
         encapsulated_msg += msg + ">>>"
@@ -36,8 +40,9 @@ class MessengerClient:
     
 
     def decapsulate(self, msg):
-        return_args   = [] # such as clearing the terminal
-        return_prompt = "" # prompt for input line
+        ''' Initialize return values '''
+        return_args   = []
+        return_prompt = ""
 
         ''' Obtain any arguments given in the message from the server '''
         arg_pattern = r"\$\$\$(.*?)\$\$\$"
@@ -76,26 +81,33 @@ class MessengerClient:
     
 
     def background_receiver(self, connected, input_queue):
+        ''' Initialize message fields filled by server '''
         server_output      = ""
         args_from_server   = []
         msg_from_server    = ""
         prompt_from_server = ""
 
+        ''' Create regex pattern to match header and footer '''
         msg_pattern = r"<<<(.*?)>>>"
 
         root    = tkinter.Tk()
         display = ClientGui(root, input_queue)
 
+        ''' Start sender loop '''
         while connected.value:
             ''' Receive from server '''
             server_output    += (self.client_socket.recv(1024)).decode()
 
+            ''' Match complete messages from server '''
             complete_messages = re.findall(msg_pattern, server_output, re.DOTALL)
             server_output     = re.sub(msg_pattern, "", server_output, flags=re.DOTALL)
 
+            ''' Iterate through complete messages received '''
             for msg in complete_messages:
+                ''' Get values from server message '''
                 args_from_server, msg_from_server, prompt_from_server = self.decapsulate(msg)
 
+                ''' Process arguments from server '''
                 for arg in args_from_server:
                     match arg:
                         case "EXT":
@@ -104,7 +116,8 @@ class MessengerClient:
                             os.system('cls' if os.name == 'nt' else 'clear')
                         case _:
                             print("INVALID ARGUMENT FROM SERVER")
-   
+                
+                ''' Print server message and prompt '''
                 print(msg_from_server)
                 print(prompt_from_server)
                 display.update_window(msg_from_server)
@@ -117,20 +130,25 @@ class MessengerClient:
         args_to_server = []
         msg_to_server  = "Initial Connection"
 
-        connected = Value("b", True)
+        ''' Shared and process local connection flags '''
+        connected    = Value("b", True)
+        client_ended = False
 
         input_queue = Queue()
 
+        ''' Start background receiver process '''
         process = Process(target = self.background_receiver, args = (connected, input_queue))
         process.start()
 
+        ''' Start sender loop '''
         while connected.value:
-            client_ended = False
             self.send(args_to_server, msg_to_server)
 
+            ''' Reset values to send to server '''
             args_to_server = []
             msg_to_server  = ""
 
+            ''' Get user input if connection to server is not terminated '''
             if connected.value and not client_ended:
                 # if prompt_from_server[0] == "":
                 #     msg_to_server = input()
@@ -146,6 +164,7 @@ class MessengerClient:
                     msg_to_server = ""
                     client_ended  = True
         
+        ''' Join receiver process with sender process '''
         process.join()
 
 
