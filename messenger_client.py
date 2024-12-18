@@ -139,10 +139,6 @@ class MessengerClient:
 
             ''' Get user input if connection to server is not terminated '''
             if connected.value and not client_ended:
-                # if prompt_from_server[0] == "":
-                #     msg_to_server = input()
-                # else:
-                #     msg_to_server = input(prompt_from_server[0] + ": ")
                 while msg_to_server == "":
                     msg_to_server = input()
                 

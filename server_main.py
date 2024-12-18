@@ -8,6 +8,7 @@ from socket import *
 from messenger_server import MessengerServer
 from multiprocessing import Process
 
+''' This function was created with help from stackoverflow '''
 def get_local_ip():
     ''' Try to connect to public server '''
     serverSocket = socket(AF_INET, SOCK_DGRAM)
@@ -57,6 +58,10 @@ def main():
                 ''' Times out periodically to handle KeyboardInterrupt '''
                 continue
 
+            except:
+                ''' Catches other errors in initializing welcome socket '''
+                raise
+
             ''' Gets a new port for the client to connect to '''
             valid_port = False
             while not valid_port:
@@ -75,7 +80,8 @@ def main():
             connectionSocket.sendall(str(new_port).encode())
             connectionSocket.close()
 
-    except KeyboardInterrupt:
+    except:
+        ''' Catches errors in welcoming server '''
         ''' Close welcoming socket '''
         serverSocket.close()
 
@@ -85,7 +91,7 @@ def main():
 
         ''' Catch all client-specific connections '''
         for process in processes:
-            process.join()
+            process.terminate()
 
         print("Server shutting down...")
 
